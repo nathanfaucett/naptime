@@ -1,4 +1,10 @@
 import type { NoiseType } from '../models';
+import {
+	setMediaSessionMetadata,
+	setMediaSessionPlaybackState,
+	registerMediaSessionHandlers
+} from './mediaSession';
+import type { Scheduler, ScheduledEvent } from './scheduler';
 
 export interface NoiseGenerator {
 	start(): Promise<void>;
@@ -18,43 +24,12 @@ function loadNoiseWorkletModule(context: AudioContext): Promise<void> {
 		return workletModuleLoaded;
 	}
 
-	const source = `
-class NoiseProcessor extends AudioWorkletProcessor {
-	constructor(options) {
-		super();
-		this.type = options.processorOptions?.type || 'white';
-		this.last = 0;
-	}
-
-	process(inputs, outputs) {
-		const output = outputs[0][0];
-
-		for (let i = 0; i < output.length; i += 1) {
-			const white = Math.random() * 2 - 1;
-
-			if (this.type === 'white') {
-				output[i] = white;
-			} else if (this.type === 'pink') {
-				this.last = 0.98 * this.last + 0.02 * white;
-				output[i] = this.last * 5;
-			} else {
-				this.last = this.last + white * 0.02;
-				this.last = Math.max(-1, Math.min(1, this.last));
-				output[i] = this.last;
-			}
-		}
-
-		return true;
-	}
-}
-
-registerProcessor('noise-processor', NoiseProcessor);
-`;
-
-	const blob = new Blob([source], { type: 'application/javascript' });
-	const url = URL.createObjectURL(blob);
-	workletModuleLoaded = context.audioWorklet.addModule(url).then(() => {
-		URL.revokeObjectURL(url);
+	// load external AudioWorklet module from static assets
+	const workletUrl = '/audio/noise-processor.js';
+	workletModuleLoaded = context.audioWorklet.addModule(workletUrl).catch((err) => {
+		// reset cached promise on failure so caller can retry/fallback
+		workletModuleLoaded = null;
+		throw err;
 	});
 
 	return workletModuleLoaded;
@@ -88,6 +63,25 @@ function createScriptNoiseNode(context: AudioContext, type: NoiseType): ScriptPr
 
 export class NapTimeAudioEngine {
 	private context: AudioContext | null = null;
+	private scheduler: Scheduler | null = null;
+	private scheduledEventHandler: ((ev: ScheduledEvent) => void) | null = null;
+
+	constructor(options?: { scheduler?: Scheduler }) {
+		if (options?.scheduler) {
+			this.setScheduler(options.scheduler);
+		}
+	}
+
+	setScheduler(s: Scheduler) {
+		this.scheduler = s;
+		this.scheduler.onEvent((ev) => {
+			if (this.scheduledEventHandler) this.scheduledEventHandler(ev as ScheduledEvent);
+		});
+	}
+
+	onScheduledEvent(cb: (ev: ScheduledEvent) => void) {
+		this.scheduledEventHandler = cb;
+	}
 
 	private get audioContext(): AudioContext {
 		if (!this.context) {
@@ -144,6 +138,23 @@ export class NapTimeAudioEngine {
 				}
 				await ready;
 				fadeTo(volume);
+
+				// update Media Session for noise playback
+				try {
+					setMediaSessionMetadata({ title: `Noise ${type}` });
+					setMediaSessionPlaybackState('playing');
+					registerMediaSessionHandlers({
+						play: async () => {
+							if (context.state === 'suspended') await context.resume();
+							fadeTo(volume);
+						},
+						pause: () => {
+							fadeTo(0);
+						}
+					});
+				} catch (e) {
+					// ignore media session errors
+				}
 			},
 			stop() {
 				fadeTo(0);
@@ -152,6 +163,9 @@ export class NapTimeAudioEngine {
 						if (source) {
 							source.disconnect();
 						}
+						try {
+							setMediaSessionPlaybackState('paused');
+						} catch (e) {}
 					},
 					fadeTime * 1000 + 20
 				);
@@ -198,6 +212,42 @@ export class NapTimeAudioEngine {
 				}
 				await audio.play();
 				fadeTo(volume);
+
+				// update Media Session metadata and playback state so lock-screen controls work
+				try {
+					const title = (() => {
+						try {
+							return new URL(url, location.href).pathname.split('/').pop() || url;
+						} catch (e) {
+							return url;
+						}
+					})();
+					setMediaSessionMetadata({ title });
+					setMediaSessionPlaybackState('playing');
+					registerMediaSessionHandlers({
+						play: async () => {
+							try {
+								await audio.play();
+								setMediaSessionPlaybackState('playing');
+							} catch (e) {}
+						},
+						pause: () => {
+							audio.pause();
+							setMediaSessionPlaybackState('paused');
+						},
+						seekbackward: (details?: any) => {
+							audio.currentTime = Math.max(0, audio.currentTime - (details?.seekOffset || 10));
+						},
+						seekforward: (details?: any) => {
+							audio.currentTime = Math.min(
+								audio.duration || Infinity,
+								audio.currentTime + (details?.seekOffset || 10)
+							);
+						}
+					});
+				} catch (e) {
+					// ignore media session errors
+				}
 			},
 			stop() {
 				fadeTo(0);
@@ -205,6 +255,9 @@ export class NapTimeAudioEngine {
 					() => {
 						audio.pause();
 						audio.currentTime = 0;
+						try {
+							setMediaSessionPlaybackState('paused');
+						} catch (e) {}
 					},
 					fadeTime * 1000 + 20
 				);

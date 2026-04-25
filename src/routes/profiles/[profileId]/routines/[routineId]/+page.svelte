@@ -7,6 +7,7 @@
 	import { getMediaItemById } from '$lib/media';
 	import { NapTimeAudioEngine } from '$lib/audio/engine';
 	import type { NoiseGenerator } from '$lib/audio/engine';
+	import { Scheduler } from '$lib/audio/scheduler';
 
 	const state = $state({
 		profile: null as Profile | null,
@@ -20,6 +21,8 @@
 	});
 
 	let engine: NapTimeAudioEngine | null = null;
+	let scheduler: Scheduler | null = null;
+	let scheduledEventIds: string[] = [];
 	let currentGenerator: NoiseGenerator | null = null;
 	let stepTimer: number | null = null;
 
@@ -28,6 +31,18 @@
 			clearTimeout(stepTimer);
 			stepTimer = null;
 		}
+	}
+
+	async function clearScheduledEvents() {
+		if (scheduledEventIds.length === 0) return;
+		try {
+			if (scheduler) {
+				scheduler.cancel(scheduledEventIds);
+			}
+		} catch (e) {
+			// ignore
+		}
+		scheduledEventIds = [];
 	}
 
 	function stopCurrentGenerator() {
@@ -80,7 +95,25 @@
 		state.status = 'running';
 
 		if (!engine) {
-			engine = new NapTimeAudioEngine();
+			// create a scheduler worker and attach to the engine for off-main-thread scheduling
+			try {
+				scheduler = new Scheduler();
+				engine = new NapTimeAudioEngine({ scheduler });
+				engine.onScheduledEvent((ev) => {
+					if (!ev || !ev.action) return;
+					if (ev.action === 'nextStep' && ev.payload?.index != null) {
+						scheduleStep(ev.payload.index);
+					} else if (ev.action === 'stop') {
+						stopRoutine();
+					} else if (ev.action === 'pause') {
+						// simple pause: stop current generator
+						currentGenerator?.stop();
+					}
+				});
+			} catch (e) {
+				// fallback to engine without scheduler
+				engine = new NapTimeAudioEngine();
+			}
 		}
 
 		stopCurrentGenerator();
@@ -91,7 +124,14 @@
 			await currentGenerator.start();
 
 			if (step.timing === 'timed' && step.duration && step.duration > 0) {
-				stepTimer = window.setTimeout(() => scheduleStep(index + 1), step.duration * 1000);
+				if (scheduler) {
+					const ids = await scheduler.schedule([
+						{ delayMs: step.duration * 1000, action: 'nextStep', payload: { index: index + 1 } }
+					]);
+					scheduledEventIds.push(...ids);
+				} else {
+					stepTimer = window.setTimeout(() => scheduleStep(index + 1), step.duration * 1000);
+				}
 			}
 			return;
 		}
@@ -116,12 +156,20 @@
 		await currentGenerator.start();
 
 		if (step.playback === 'timed' && step.duration && step.duration > 0) {
-			stepTimer = window.setTimeout(() => scheduleStep(index + 1), step.duration * 1000);
+			if (scheduler) {
+				const ids = await scheduler.schedule([
+					{ delayMs: step.duration * 1000, action: 'nextStep', payload: { index: index + 1 } }
+				]);
+				scheduledEventIds.push(...ids);
+			} else {
+				stepTimer = window.setTimeout(() => scheduleStep(index + 1), step.duration * 1000);
+			}
 		}
 	}
 
 	function stopRoutine() {
 		clearStepTimer();
+		clearScheduledEvents();
 		stopCurrentGenerator();
 		state.status = 'idle';
 		state.currentStepIndex = 0;
