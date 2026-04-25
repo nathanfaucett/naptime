@@ -12,6 +12,7 @@
 		Profile
 	} from '$lib/models';
 	import { createRoutine, getProfileById } from '$lib/storage';
+	import { getMediaItemById, mediaLibrary } from '$lib/media';
 	import { NapTimeAudioEngine } from '$lib/audio/engine';
 	import type { NoiseGenerator } from '$lib/audio/engine';
 	const state = $state({
@@ -22,10 +23,10 @@
 		steps: [] as RoutineAction[],
 		newStepType: 'noise' as RoutineActionType,
 		noiseType: 'white' as NoiseType,
-		noiseTiming: 'timed' as NoiseTiming,
+		noiseTiming: 'forever' as NoiseTiming,
 		duration: 30,
 		volume: 0.6,
-		mediaId: 'song-123',
+		mediaId: mediaLibrary[0]?.id ?? 'song-123',
 		mediaPlayback: 'loop' as MediaPlayback,
 		previewing: false
 	});
@@ -75,7 +76,7 @@
 		}
 	}
 
-	function stopPreview() {
+	function stopPreviewGenerator() {
 		previewGenerator?.stop();
 		previewGenerator = null;
 		previewType = null;
@@ -84,7 +85,29 @@
 		previewDuration = 0;
 		previewVolume = null;
 		clearPreviewTimeout();
+	}
+
+	function stopPreview() {
+		stopPreviewGenerator();
 		state.previewing = false;
+	}
+
+	function resolveMediaSource(id: string) {
+		const media = getMediaItemById(id);
+		if (media) {
+			return media.src;
+		}
+
+		if (
+			id.startsWith('http://') ||
+			id.startsWith('https://') ||
+			id.startsWith('/') ||
+			id.startsWith('./')
+		) {
+			return id;
+		}
+
+		return null;
 	}
 
 	function createPreviewGenerator() {
@@ -101,11 +124,12 @@
 		}
 
 		if (state.newStepType === 'media') {
-			return previewEngine.createMediaPlayer(
-				state.mediaId,
-				state.volume,
-				state.mediaPlayback === 'loop'
-			);
+			const source = resolveMediaSource(state.mediaId);
+			if (!source) {
+				return null;
+			}
+
+			return previewEngine.createMediaPlayer(source, state.volume, state.mediaPlayback === 'loop');
 		}
 
 		return null;
@@ -116,7 +140,7 @@
 			return;
 		}
 
-		stopPreview();
+		stopPreviewGenerator();
 
 		previewGenerator = createPreviewGenerator();
 		if (!previewGenerator) {
@@ -148,17 +172,7 @@
 			return;
 		}
 
-		if (state.newStepType === 'wait') {
-			stopPreview();
-			return;
-		}
-
-		const currentMode =
-			state.newStepType === 'noise'
-				? state.noiseTiming
-				: state.newStepType === 'media'
-					? state.mediaPlayback
-					: null;
+		const currentMode = state.newStepType === 'noise' ? state.noiseTiming : state.mediaPlayback;
 		const currentSource =
 			state.newStepType === 'noise'
 				? state.noiseType
@@ -175,7 +189,7 @@
 			currentSource !== previewSource ||
 			currentDuration !== previewDuration
 		) {
-			stopPreview();
+			stopPreviewGenerator();
 			previewGenerator = createPreviewGenerator();
 			if (previewGenerator) {
 				previewGenerator.start();
@@ -185,6 +199,7 @@
 				previewDuration = currentDuration;
 				previewVolume = currentVolume;
 				schedulePreviewStop();
+				state.previewing = true;
 			}
 			return;
 		}
@@ -215,18 +230,13 @@
 				timing: state.noiseTiming,
 				duration: state.noiseTiming === 'timed' ? state.duration : undefined
 			});
-		} else if (state.newStepType === 'media') {
+		} else {
 			state.steps.push({
 				type: 'media',
 				id: state.mediaId,
 				playback: state.mediaPlayback,
 				volume: state.volume,
 				duration: state.mediaPlayback === 'timed' ? state.duration : undefined
-			});
-		} else {
-			state.steps.push({
-				type: 'wait',
-				duration: state.duration
 			});
 		}
 	}
@@ -304,7 +314,6 @@
 					>
 						<option value="noise">Noise</option>
 						<option value="media">Media</option>
-						<option value="wait">Wait</option>
 					</select>
 				</div>
 
@@ -338,7 +347,7 @@
 							</select>
 						</div>
 					</div>
-					<div class="grid gap-3 sm:grid-cols-2">
+					<div class="grid gap-3 sm:grid-cols-1">
 						<div>
 							<label class="block text-sm font-medium text-slate-700" for="noise-volume"
 								>Volume</label
@@ -374,14 +383,18 @@
 				{:else if state.newStepType === 'media'}
 					<div class="grid gap-3 sm:grid-cols-2">
 						<div>
-							<label class="block text-sm font-medium text-slate-700" for="media-id">Media ID</label
+							<label class="block text-sm font-medium text-slate-700" for="media-id"
+								>Media source</label
 							>
-							<input
+							<select
 								id="media-id"
-								type="text"
 								class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
 								bind:value={state.mediaId}
-							/>
+							>
+								{#each mediaLibrary as item}
+									<option value={item.id}>{item.title}</option>
+								{/each}
+							</select>
 						</div>
 						<div>
 							<label class="block text-sm font-medium text-slate-700" for="media-playback"
@@ -446,15 +459,13 @@
 					</div>
 				{/if}
 
-				{#if state.newStepType !== 'wait'}
-					<button
-						type="button"
-						onclick={togglePreview}
-						class="inline-flex items-center justify-center rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
-					>
-						{state.previewing ? 'Stop preview' : 'Preview'}
-					</button>
-				{/if}
+				<button
+					type="button"
+					onclick={togglePreview}
+					class="inline-flex items-center justify-center rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
+				>
+					{state.previewing ? 'Stop preview' : 'Preview'}
+				</button>
 
 				<button
 					type="button"
@@ -488,8 +499,6 @@
 												{:else}
 													Media {step.id} · timed {step.duration}s
 												{/if}
-											{:else}
-												Wait {step.duration}s
 											{/if}
 										</p>
 									</div>

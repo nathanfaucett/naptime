@@ -81,6 +81,12 @@
 										<p class="mt-1 text-sm text-slate-600">{routine.steps.length} step(s)</p>
 									</div>
 									<div class="space-x-2">
+										<a
+											href={`/profiles/${state.profileId}/routines/${routine.id}`}
+											class="rounded-full bg-slate-900 px-3 py-1 text-sm font-medium text-white transition hover:bg-slate-800"
+										>
+											Start
+										</a>
 										<button
 											class="rounded-full bg-rose-500 px-3 py-1 text-sm font-medium text-white transition hover:bg-rose-600"
 											onclick={() => handleDeleteRoutine(routine.id)}

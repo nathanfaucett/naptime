@@ -1,32 +1,89 @@
 import type { NoiseType } from '../models';
 
 export interface NoiseGenerator {
-	start(): void;
+	start(): Promise<void>;
 	stop(): void;
 	setVolume(volume: number): void;
+	setEndedCallback?(callback: () => void): void;
 }
 
-function createNoiseBuffer(context: AudioContext, type: NoiseType): AudioBuffer {
-	const length = context.sampleRate * 2;
-	const buffer = context.createBuffer(1, length, context.sampleRate);
-	const channel = buffer.getChannelData(0);
-	let last = 0;
+let workletModuleLoaded: Promise<void> | null = null;
 
-	for (let i = 0; i < length; i += 1) {
-		const white = Math.random() * 2 - 1;
-
-		if (type === 'white') {
-			channel[i] = white;
-		} else if (type === 'pink') {
-			last = 0.98 * last + 0.02 * white;
-			channel[i] = last * 0.5;
-		} else {
-			last = last + white * 0.02;
-			channel[i] = Math.max(-1, Math.min(1, last));
-		}
+function loadNoiseWorkletModule(context: AudioContext): Promise<void> {
+	if (!('audioWorklet' in context)) {
+		return Promise.reject(new Error('AudioWorklet not supported'));
 	}
 
-	return buffer;
+	if (workletModuleLoaded) {
+		return workletModuleLoaded;
+	}
+
+	const source = `
+class NoiseProcessor extends AudioWorkletProcessor {
+	constructor(options) {
+		super();
+		this.type = options.processorOptions?.type || 'white';
+		this.last = 0;
+	}
+
+	process(inputs, outputs) {
+		const output = outputs[0][0];
+
+		for (let i = 0; i < output.length; i += 1) {
+			const white = Math.random() * 2 - 1;
+
+			if (this.type === 'white') {
+				output[i] = white;
+			} else if (this.type === 'pink') {
+				this.last = 0.98 * this.last + 0.02 * white;
+				output[i] = this.last * 5;
+			} else {
+				this.last = this.last + white * 0.02;
+				this.last = Math.max(-1, Math.min(1, this.last));
+				output[i] = this.last;
+			}
+		}
+
+		return true;
+	}
+}
+
+registerProcessor('noise-processor', NoiseProcessor);
+`;
+
+	const blob = new Blob([source], { type: 'application/javascript' });
+	const url = URL.createObjectURL(blob);
+	workletModuleLoaded = context.audioWorklet.addModule(url).then(() => {
+		URL.revokeObjectURL(url);
+	});
+
+	return workletModuleLoaded;
+}
+
+function createScriptNoiseNode(context: AudioContext, type: NoiseType): ScriptProcessorNode {
+	const node = context.createScriptProcessor(4096, 0, 1);
+	let last = 0;
+
+	node.onaudioprocess = (event) => {
+		const output = event.outputBuffer.getChannelData(0);
+
+		for (let i = 0; i < output.length; i += 1) {
+			const white = Math.random() * 2 - 1;
+
+			if (type === 'white') {
+				output[i] = white;
+			} else if (type === 'pink') {
+				last = 0.98 * last + 0.02 * white;
+				output[i] = last * 5;
+			} else {
+				last = last + white * 0.02;
+				last = Math.max(-1, Math.min(1, last));
+				output[i] = last;
+			}
+		}
+	};
+
+	return node;
 }
 
 export class NapTimeAudioEngine {
@@ -43,13 +100,34 @@ export class NapTimeAudioEngine {
 	createNoiseGenerator(type: NoiseType, volume = 0.5): NoiseGenerator {
 		const context = this.audioContext;
 		const gain = context.createGain();
-		const source = context.createBufferSource();
-		source.buffer = createNoiseBuffer(context, type);
-		source.loop = true;
+		let source: AudioNode | null = createScriptNoiseNode(context, type);
+		let ready = Promise.resolve();
+
+		if ('audioWorklet' in context) {
+			ready = loadNoiseWorkletModule(context)
+				.then(() => {
+					const worklet = new AudioWorkletNode(context, 'noise-processor', {
+						processorOptions: { type }
+					});
+					worklet.connect(gain);
+					if (source) {
+						source.disconnect();
+					}
+					source = worklet;
+				})
+				.catch(() => {
+					if (!source) {
+						source = createScriptNoiseNode(context, type);
+						source.connect(gain);
+					}
+				});
+		}
 
 		const fadeTime = 0.1;
 		gain.gain.value = 0;
-		source.connect(gain);
+		if (source) {
+			source.connect(gain);
+		}
 		gain.connect(context.destination);
 
 		function fadeTo(target: number, duration = fadeTime) {
@@ -60,21 +138,19 @@ export class NapTimeAudioEngine {
 		}
 
 		return {
-			start() {
+			async start() {
 				if (context.state === 'suspended') {
-					void context.resume();
+					await context.resume();
 				}
-				source.start();
+				await ready;
 				fadeTo(volume);
 			},
 			stop() {
 				fadeTo(0);
 				window.setTimeout(
 					() => {
-						try {
-							source.stop();
-						} catch {
-							// ignore if already stopped
+						if (source) {
+							source.disconnect();
 						}
 					},
 					fadeTime * 1000 + 20
@@ -95,6 +171,13 @@ export class NapTimeAudioEngine {
 
 		const source = context.createMediaElementSource(audio);
 		const gain = context.createGain();
+		let endedCallback: (() => void) | null = null;
+
+		audio.onended = () => {
+			if (!audio.loop && endedCallback !== null) {
+				endedCallback();
+			}
+		};
 
 		const fadeTime = 0.1;
 		gain.gain.value = 0;
@@ -109,11 +192,11 @@ export class NapTimeAudioEngine {
 		}
 
 		return {
-			start() {
+			async start() {
 				if (context.state === 'suspended') {
-					void context.resume();
+					await context.resume();
 				}
-				void audio.play();
+				await audio.play();
 				fadeTo(volume);
 			},
 			stop() {
@@ -128,6 +211,9 @@ export class NapTimeAudioEngine {
 			},
 			setVolume(nextVolume: number) {
 				fadeTo(nextVolume);
+			},
+			setEndedCallback(callback: () => void) {
+				endedCallback = callback;
 			}
 		};
 	}

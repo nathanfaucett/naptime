@@ -4,6 +4,6 @@ description: Svelte coding guidelines and best practices for AI code generation,
 applyTo: **/*.svelte, **/*.svelte.ts, **/*.svelte.js
 ---
 
-# Instructions
+# Svelte Coding Guidelines and Best Practices
 
-- always load the skills `svelte-code-writer` and `svelte-core-bestpractices`
+IMPORTANT: must use the skills `svelte-code-writer` and `svelte-core-bestpractices`.
