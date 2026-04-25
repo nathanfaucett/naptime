@@ -2,6 +2,10 @@
 	import type { Pathname } from '$app/types';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
+	import { browser } from '$app/environment';
+	import { activeProfileId } from '$lib/activeProfile';
+	import type { Profile } from '$lib/models';
+	import { getProfileById } from '$lib/storage';
 	import { locales, localizeHref } from '$lib/paraglide/runtime';
 	import './layout.css';
 	import favicon from '$lib/assets/favicon.svg';
@@ -9,12 +13,20 @@
 	const { children } = $props();
 
 	const state = $state({
-		navOpen: false
+		navOpen: false,
+		profile: null as Profile | null
 	});
 
-	const profileId = $derived(page.params.profileId ?? '');
-	const profilePath = $derived(profileId ? `/profiles/${profileId}` : '/');
+	const profileId = $derived($activeProfileId ?? '');
+	const profilePath = $derived(profileId ? `/profiles` : '/');
 	const hasProfile = $derived(profileId.length > 0);
+
+	$effect(() => {
+		if (!browser) return;
+		const id = $activeProfileId ?? '';
+		const p = id ? getProfileById(id) : null;
+		state.profile = p ?? null;
+	});
 
 	function toggleNav() {
 		state.navOpen = !state.navOpen;
@@ -62,6 +74,17 @@
 						class="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
 						>New routine</a
 					>
+					{#if state.profile}
+						<span
+							class="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700"
+						>
+							<span
+								class="mr-2 inline-block h-2 w-2 rounded-full"
+								style="background: {state.profile.color};"
+							></span>
+							{state.profile.name}
+						</span>
+					{/if}
 				{/if}
 			</div>
 		</div>
@@ -103,6 +126,17 @@
 					>
 						New routine
 					</a>
+					{#if state.profile}
+						<div
+							class="mt-2 block rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700"
+						>
+							<span
+								class="mr-2 inline-block h-2 w-2 rounded-full"
+								style="background: {state.profile.color};"
+							></span>
+							{state.profile.name}
+						</div>
+					{/if}
 				{/if}
 			</div>
 		</div>

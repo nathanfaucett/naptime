@@ -3,6 +3,7 @@
 	import { resolve } from '$app/paths';
 	import type { Profile } from '$lib/models';
 	import { createProfile, deleteProfile, getAllProfiles } from '$lib/storage';
+	import { setActiveProfileId } from '$lib/activeProfile';
 
 	const state = $state({
 		profiles: [] as Profile[],
@@ -84,13 +85,15 @@
 										</div>
 										<div class="flex flex-wrap items-center gap-2">
 											<a
-												href={resolve(`/profiles/${profile.id}`)}
+												href={resolve('/profiles')}
+												onclick={() => setActiveProfileId(profile.id)}
 												class="rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
 											>
 												View routines
 											</a>
 											<a
-												href={resolve(`/profiles/${profile.id}/routines/new`)}
+												href={resolve('/profiles/routines/new')}
+												onclick={() => setActiveProfileId(profile.id)}
 												class="rounded-full bg-slate-900 px-3 py-1 text-sm font-medium text-white transition hover:bg-slate-800"
 											>
 												New routine
