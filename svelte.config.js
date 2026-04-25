@@ -15,6 +15,13 @@ const config = {
 		paths: {
 			base: basePath
 		}
+		,
+		prerender: {
+			// Some dynamic routes (e.g. `/profiles/routines/[routineId]`) are
+			// intentionally not discoverable during the crawler. Don't fail the
+			// build when such routes are marked prerenderable but not found.
+			handleUnseenRoutes: 'ignore'
+		}
 	}
 };
 
