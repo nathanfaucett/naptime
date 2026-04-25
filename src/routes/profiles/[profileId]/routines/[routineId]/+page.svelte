@@ -39,7 +39,8 @@
 			if (scheduler) {
 				scheduler.cancel(scheduledEventIds);
 			}
-		} catch (e) {
+		} catch (_e) {
+			void _e;
 			// ignore
 		}
 		scheduledEventIds = [];
@@ -110,7 +111,8 @@
 						currentGenerator?.stop();
 					}
 				});
-			} catch (e) {
+			} catch (_e) {
+				void _e;
 				// fallback to engine without scheduler
 				engine = new NapTimeAudioEngine();
 			}
@@ -228,7 +230,7 @@
 		>
 			<p>{state.error}</p>
 			<a
-				href={`/profiles/${state.profileId}`}
+				href={resolve(`/profiles/${state.profileId}`)}
 				class="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-rose-200 transition hover:bg-rose-100"
 			>
 				Back to routines
@@ -266,7 +268,7 @@
 							Stop
 						</button>
 						<a
-							href={`/profiles/${state.profileId}`}
+							href={resolve(`/profiles/${state.profileId}`)}
 							class="rounded-full border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-700 transition hover:bg-slate-100"
 						>
 							Back to routines
@@ -303,7 +305,7 @@
 					<div>
 						<h3 class="text-sm font-semibold text-slate-900">Step list</h3>
 						<ul class="mt-3 space-y-2">
-							{#each state.routine.steps as step, index}
+							{#each state.routine.steps as step, index (index)}
 								<li
 									class="rounded-3xl border px-4 py-3 text-sm text-slate-700"
 									class:text-slate-900={index === state.currentStepIndex}

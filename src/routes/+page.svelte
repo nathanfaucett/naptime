@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { resolve } from '$app/paths';
 	import type { Profile } from '$lib/models';
 	import { createProfile, deleteProfile, getAllProfiles } from '$lib/storage';
 
@@ -83,13 +84,13 @@
 										</div>
 										<div class="flex flex-wrap items-center gap-2">
 											<a
-												href={`/profiles/${profile.id}`}
+												href={resolve(`/profiles/${profile.id}`)}
 												class="rounded-full border border-slate-300 bg-white px-3 py-1 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
 											>
 												View routines
 											</a>
 											<a
-												href={`/profiles/${profile.id}/routines/new`}
+												href={resolve(`/profiles/${profile.id}/routines/new`)}
 												class="rounded-full bg-slate-900 px-3 py-1 text-sm font-medium text-white transition hover:bg-slate-800"
 											>
 												New routine

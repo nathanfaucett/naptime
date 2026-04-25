@@ -1,4 +1,4 @@
-export type ScheduledEvent = { id?: string; delayMs: number; action: string; payload?: any };
+export type ScheduledEvent = { id?: string; delayMs: number; action: string; payload?: unknown };
 
 export class Scheduler {
 	private worker: Worker;
@@ -9,7 +9,7 @@ export class Scheduler {
 
 	onEvent(cb: (event: ScheduledEvent & { id: string }) => void) {
 		this.worker.onmessage = (e: MessageEvent) => {
-			const data = (e as any).data;
+			const data = e.data;
 			if (data?.type === 'event') {
 				cb(data.event as ScheduledEvent & { id: string });
 			}
@@ -34,10 +34,10 @@ export class Scheduler {
 		this.worker.postMessage({ type: 'clearAll' });
 	}
 
-	ping(): Promise<any> {
+	ping(): Promise<unknown> {
 		return new Promise((resolve) => {
 			const handler = (e: MessageEvent) => {
-				const data = (e as any).data;
+				const data = e.data;
 				if (data?.type === 'pong') {
 					this.worker.removeEventListener('message', handler as EventListener);
 					resolve(data);

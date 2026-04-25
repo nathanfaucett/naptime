@@ -44,21 +44,21 @@
 		class="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-6 lg:px-8"
 	>
 		<div class="flex flex-wrap items-center gap-3">
-			<a href="/" class="text-lg font-semibold text-slate-900">Nap Time</a>
+			<a href={resolve('/')} class="text-lg font-semibold text-slate-900">Nap Time</a>
 			<div class="hidden items-center gap-2 sm:flex">
 				<a
-					href="/"
+					href={resolve('/')}
 					class="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
 					>Home</a
 				>
 				{#if hasProfile}
 					<a
-						href={profilePath}
+						href={resolve(profilePath)}
 						class="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
 						>Profile</a
 					>
 					<a
-						href={`${profilePath}/routines/new`}
+						href={resolve(`${profilePath}/routines/new`)}
 						class="rounded-full border border-slate-300 bg-slate-50 px-3 py-1 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
 						>New routine</a
 					>
@@ -90,14 +90,14 @@
 			<div class="space-y-2 pt-3">
 				{#if hasProfile}
 					<a
-						href={profilePath}
+						href={resolve(profilePath)}
 						onclick={closeNav}
 						class="block rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
 					>
 						Profile
 					</a>
 					<a
-						href={`${profilePath}/routines/new`}
+						href={resolve(`${profilePath}/routines/new`)}
 						onclick={closeNav}
 						class="block rounded-3xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700 transition hover:bg-slate-100"
 					>

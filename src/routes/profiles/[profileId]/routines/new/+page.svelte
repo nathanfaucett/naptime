@@ -242,6 +242,7 @@
 	}
 
 	async function handleSave(event: SubmitEvent) {
+		event.preventDefault();
 		if (!state.routineName.trim()) {
 			state.error = 'Routine name is required.';
 			return;
@@ -262,7 +263,7 @@
 		};
 
 		await createRoutine(routine);
-		await goto(`/profiles/${state.profileId}`);
+		await goto(resolve(`/profiles/${state.profileId}`));
 	}
 
 	function removeStep(index: number) {
@@ -391,7 +392,7 @@
 								class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
 								bind:value={state.mediaId}
 							>
-								{#each mediaLibrary as item}
+								{#each mediaLibrary as item (item.id)}
 									<option value={item.id}>{item.title}</option>
 								{/each}
 							</select>
@@ -480,7 +481,7 @@
 				<section class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
 					<h2 class="text-lg font-semibold text-slate-900">Steps</h2>
 					<div class="mt-4 space-y-4">
-						{#each state.steps as step, index}
+						{#each state.steps as step, index (index)}
 							<div class="rounded-3xl border border-slate-200 bg-slate-50 p-4">
 								<div class="flex items-center justify-between gap-4">
 									<div>
@@ -517,7 +518,7 @@
 
 			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
 				<a
-					href={`/profiles/${state.profileId}`}
+					href={resolve(`/profiles/${state.profileId}`)}
 					class="inline-flex items-center justify-center rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm font-semibold text-slate-900 transition hover:bg-slate-100"
 				>
 					Back to routines

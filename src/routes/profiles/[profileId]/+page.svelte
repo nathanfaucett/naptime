@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import type { Profile, Routine } from '$lib/models';
 	import { getProfileById, getRoutinesByProfile, deleteRoutine } from '$lib/storage';
@@ -51,7 +52,7 @@
 						</p>
 					</div>
 					<a
-						href={`/profiles/${state.profileId}/routines/new`}
+						href={resolve(`/profiles/${state.profileId}/routines/new`)}
 						class="inline-flex items-center justify-center rounded-3xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white transition hover:bg-slate-800"
 					>
 						Create routine
@@ -82,7 +83,7 @@
 									</div>
 									<div class="space-x-2">
 										<a
-											href={`/profiles/${state.profileId}/routines/${routine.id}`}
+											href={resolve(`/profiles/${state.profileId}/routines/${routine.id}`)}
 											class="rounded-full bg-slate-900 px-3 py-1 text-sm font-medium text-white transition hover:bg-slate-800"
 										>
 											Start
@@ -110,7 +111,7 @@
 		>
 			<p>{state.error}</p>
 			<a
-				href="/"
+				href={resolve('/')}
 				class="mt-4 inline-flex rounded-full bg-white px-4 py-2 text-sm font-semibold text-rose-700 shadow-sm ring-1 ring-rose-200 transition hover:bg-rose-100"
 			>
 				Back to home

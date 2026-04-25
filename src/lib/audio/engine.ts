@@ -152,8 +152,8 @@ export class NapTimeAudioEngine {
 							fadeTo(0);
 						}
 					});
-				} catch (e) {
-					// ignore media session errors
+				} catch (_e) {
+					void _e;
 				}
 			},
 			stop() {
@@ -165,7 +165,9 @@ export class NapTimeAudioEngine {
 						}
 						try {
 							setMediaSessionPlaybackState('paused');
-						} catch (e) {}
+						} catch (_e) {
+							void _e;
+						}
 					},
 					fadeTime * 1000 + 20
 				);
@@ -218,7 +220,8 @@ export class NapTimeAudioEngine {
 					const title = (() => {
 						try {
 							return new URL(url, location.href).pathname.split('/').pop() || url;
-						} catch (e) {
+						} catch (_e) {
+							void _e;
 							return url;
 						}
 					})();
@@ -229,23 +232,26 @@ export class NapTimeAudioEngine {
 							try {
 								await audio.play();
 								setMediaSessionPlaybackState('playing');
-							} catch (e) {}
+							} catch (_e) {
+								void _e;
+							}
 						},
 						pause: () => {
 							audio.pause();
 							setMediaSessionPlaybackState('paused');
 						},
-						seekbackward: (details?: any) => {
+						seekbackward: (details?: MediaSessionActionDetails) => {
 							audio.currentTime = Math.max(0, audio.currentTime - (details?.seekOffset || 10));
 						},
-						seekforward: (details?: any) => {
+						seekforward: (details?: MediaSessionActionDetails) => {
 							audio.currentTime = Math.min(
 								audio.duration || Infinity,
 								audio.currentTime + (details?.seekOffset || 10)
 							);
 						}
 					});
-				} catch (e) {
+				} catch (_e) {
+					void _e;
 					// ignore media session errors
 				}
 			},
@@ -257,7 +263,9 @@ export class NapTimeAudioEngine {
 						audio.currentTime = 0;
 						try {
 							setMediaSessionPlaybackState('paused');
-						} catch (e) {}
+						} catch (_e) {
+							void _e;
+						}
 					},
 					fadeTime * 1000 + 20
 				);

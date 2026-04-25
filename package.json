@@ -47,6 +47,6 @@
 		"vitest-browser-svelte": "^2.1.1"
 	},
 	"dependencies": {
-		"@aicacia/db": "link:../libs/db"
+		"@aicacia/db": "github:aicacia/ts-db#npm"
 	}
 }
