@@ -94,8 +94,8 @@ export class NapTimeAudioEngine {
 	createNoiseGenerator(type: NoiseType, volume = 0.5): NoiseGenerator {
 		const context = this.audioContext;
 		const gain = context.createGain();
-		let source: AudioNode | null = createScriptNoiseNode(context, type);
-		let ready = Promise.resolve();
+		let source: AudioNode | null = null;
+		let ready: Promise<void> = Promise.resolve();
 
 		if ('audioWorklet' in context) {
 			ready = loadNoiseWorkletModule(context)
@@ -104,17 +104,17 @@ export class NapTimeAudioEngine {
 						processorOptions: { type }
 					});
 					worklet.connect(gain);
-					if (source) {
-						source.disconnect();
-					}
 					source = worklet;
 				})
 				.catch(() => {
-					if (!source) {
-						source = createScriptNoiseNode(context, type);
-						source.connect(gain);
-					}
+					// fallback to ScriptProcessorNode only if the worklet fails to load
+					source = createScriptNoiseNode(context, type);
+					source.connect(gain);
 				});
+		} else {
+			// no AudioWorklet support — create ScriptProcessorNode
+			source = createScriptNoiseNode(context, type);
+			source.connect(gain);
 		}
 
 		const fadeTime = 0.1;
