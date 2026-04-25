@@ -1,4 +1,4 @@
-/* eslint-disable */
+ 
 class NoiseProcessor extends AudioWorkletProcessor {
   constructor(options) {
     super();
