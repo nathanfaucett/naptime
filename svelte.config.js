@@ -13,8 +13,7 @@ const config = {
 		adapter: adapter({ strict: false }),
 		// Ensure SvelteKit knows the base path when deployed to a subpath (e.g., GitHub Pages)
 		paths: {
-			base: basePath,
-			assets: basePath
+			base: basePath
 		}
 	}
 };
