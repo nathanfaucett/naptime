@@ -4,7 +4,11 @@ import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 
+// Provide a Vite `base` value derived from the CI `BASE_PATH` env var (ensures assets are served from the repo subpath)
+const basePath = process.env.BASE_PATH ? `${process.env.BASE_PATH.replace(/\/+$/g, '')}/` : '/';
+
 export default defineConfig({
+	base: basePath,
 	plugins: [
 		tailwindcss(),
 		sveltekit(),
