@@ -1,0 +1,4 @@
+onlyBuiltDependencies:
+  - esbuild
+overrides:
+  '@aicacia/db': link:../libs/db
