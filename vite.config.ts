@@ -1,17 +1,15 @@
 import { paraglideVitePlugin } from '@inlang/paraglide-js';
 import tailwindcss from '@tailwindcss/vite';
+import devtoolsJson from 'vite-plugin-devtools-json';
 import { defineConfig } from 'vitest/config';
 import { playwright } from '@vitest/browser-playwright';
 import { sveltekit } from '@sveltejs/kit/vite';
 
-// Provide a Vite `base` value derived from the CI `BASE_PATH` env var (ensures assets are served from the repo subpath)
-const basePath = process.env.BASE_PATH ? `${process.env.BASE_PATH.replace(/\/+$/g, '')}/` : '/';
-
 export default defineConfig({
-	base: basePath,
 	plugins: [
 		tailwindcss(),
 		sveltekit(),
+		devtoolsJson(),
 		paraglideVitePlugin({ project: './project.inlang', outdir: './src/lib/paraglide' })
 	],
 	test: {

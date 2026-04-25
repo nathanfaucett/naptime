@@ -10,7 +10,7 @@ const config = {
 		runes: ({ filename }) => (filename.split(/[/\\]/).includes('node_modules') ? undefined : true)
 	},
 	kit: {
-		adapter: adapter({ strict: false }),
+		adapter: adapter({ strict: false, fallback: 'index.html' }),
 		// Ensure SvelteKit knows the base path when deployed to a subpath (e.g., GitHub Pages)
 		paths: {
 			base: basePath
