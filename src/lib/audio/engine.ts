@@ -47,9 +47,17 @@ export class NapTimeAudioEngine {
 		source.buffer = createNoiseBuffer(context, type);
 		source.loop = true;
 
-		gain.gain.value = volume;
+		const fadeTime = 0.1;
+		gain.gain.value = 0;
 		source.connect(gain);
 		gain.connect(context.destination);
+
+		function fadeTo(target: number, duration = fadeTime) {
+			const now = context.currentTime;
+			gain.gain.cancelScheduledValues(now);
+			gain.gain.setValueAtTime(gain.gain.value, now);
+			gain.gain.linearRampToValueAtTime(target, now + duration);
+		}
 
 		return {
 			start() {
@@ -57,28 +65,48 @@ export class NapTimeAudioEngine {
 					void context.resume();
 				}
 				source.start();
+				fadeTo(volume);
 			},
 			stop() {
-				source.stop();
+				fadeTo(0);
+				window.setTimeout(
+					() => {
+						try {
+							source.stop();
+						} catch {
+							// ignore if already stopped
+						}
+					},
+					fadeTime * 1000 + 20
+				);
 			},
 			setVolume(nextVolume: number) {
-				gain.gain.setTargetAtTime(nextVolume, context.currentTime, 0.01);
+				fadeTo(nextVolume);
 			}
 		};
 	}
 
-	createMediaPlayer(url: string, volume = 0.5): NoiseGenerator {
+	createMediaPlayer(url: string, volume = 0.5, loop = false): NoiseGenerator {
 		const context = this.audioContext;
 		const audio = new Audio(url);
 		audio.crossOrigin = 'anonymous';
 		audio.preload = 'auto';
+		audio.loop = loop;
 
 		const source = context.createMediaElementSource(audio);
 		const gain = context.createGain();
 
-		gain.gain.value = volume;
+		const fadeTime = 0.1;
+		gain.gain.value = 0;
 		source.connect(gain);
 		gain.connect(context.destination);
+
+		function fadeTo(target: number, duration = fadeTime) {
+			const now = context.currentTime;
+			gain.gain.cancelScheduledValues(now);
+			gain.gain.setValueAtTime(gain.gain.value, now);
+			gain.gain.linearRampToValueAtTime(target, now + duration);
+		}
 
 		return {
 			start() {
@@ -86,13 +114,20 @@ export class NapTimeAudioEngine {
 					void context.resume();
 				}
 				void audio.play();
+				fadeTo(volume);
 			},
 			stop() {
-				audio.pause();
-				audio.currentTime = 0;
+				fadeTo(0);
+				window.setTimeout(
+					() => {
+						audio.pause();
+						audio.currentTime = 0;
+					},
+					fadeTime * 1000 + 20
+				);
 			},
 			setVolume(nextVolume: number) {
-				gain.gain.setTargetAtTime(nextVolume, context.currentTime, 0.01);
+				fadeTo(nextVolume);
 			}
 		};
 	}

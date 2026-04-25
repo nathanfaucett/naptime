@@ -22,8 +22,8 @@ const defaultRoutines: Routine[] = [
 		createdAt: Date.now(),
 		updatedAt: Date.now(),
 		steps: [
-			{ type: 'noise', noise: 'white', volume: 0.6, duration: 600, fade: 5 },
-			{ type: 'media', id: 'song-123', loop: true, volume: 0.8 }
+			{ type: 'noise', noise: 'white', volume: 0.6, timing: 'timed', duration: 600 },
+			{ type: 'media', id: 'song-123', playback: 'loop', volume: 0.8 }
 		]
 	}
 ];

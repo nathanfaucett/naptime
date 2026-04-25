@@ -3,7 +3,14 @@
 	import { page } from '$app/state';
 	import { goto } from '$app/navigation';
 	import { onDestroy } from 'svelte';
-	import type { NoiseType, RoutineAction, RoutineActionType, Profile } from '$lib/models';
+	import type {
+		NoiseType,
+		NoiseTiming,
+		MediaPlayback,
+		RoutineAction,
+		RoutineActionType,
+		Profile
+	} from '$lib/models';
 	import { createRoutine, getProfileById } from '$lib/storage';
 	import { NapTimeAudioEngine } from '$lib/audio/engine';
 	import type { NoiseGenerator } from '$lib/audio/engine';
@@ -15,11 +22,11 @@
 		steps: [] as RoutineAction[],
 		newStepType: 'noise' as RoutineActionType,
 		noiseType: 'white' as NoiseType,
+		noiseTiming: 'timed' as NoiseTiming,
 		duration: 30,
 		volume: 0.6,
-		fade: 5,
 		mediaId: 'song-123',
-		loop: false,
+		mediaPlayback: 'loop' as MediaPlayback,
 		previewing: false
 	});
 
@@ -41,11 +48,67 @@
 
 	let previewEngine: NapTimeAudioEngine | null = null;
 	let previewGenerator: NoiseGenerator | null = null;
+	let previewType: RoutineActionType | null = null;
+	let previewMode: string | null = null;
+	let previewSource: string | null = null;
+	let previewDuration = 0;
+	let previewVolume: number | null = null;
+	let previewTimeout: number | null = null;
+
+	function clearPreviewTimeout() {
+		if (previewTimeout !== null) {
+			clearTimeout(previewTimeout);
+			previewTimeout = null;
+		}
+	}
+
+	function schedulePreviewStop() {
+		clearPreviewTimeout();
+
+		if (state.newStepType === 'noise' && state.noiseTiming === 'timed') {
+			previewTimeout = window.setTimeout(stopPreview, state.duration * 1000);
+			return;
+		}
+
+		if (state.newStepType === 'media' && state.mediaPlayback === 'timed') {
+			previewTimeout = window.setTimeout(stopPreview, state.duration * 1000);
+		}
+	}
 
 	function stopPreview() {
 		previewGenerator?.stop();
 		previewGenerator = null;
+		previewType = null;
+		previewMode = null;
+		previewSource = null;
+		previewDuration = 0;
+		previewVolume = null;
+		clearPreviewTimeout();
 		state.previewing = false;
+	}
+
+	function createPreviewGenerator() {
+		if (!browser) {
+			return null;
+		}
+
+		if (!previewEngine) {
+			previewEngine = new NapTimeAudioEngine();
+		}
+
+		if (state.newStepType === 'noise') {
+			return previewEngine.createNoiseGenerator(state.noiseType, state.volume);
+		}
+
+		if (state.newStepType === 'media') {
+			return previewEngine.createMediaPlayer(
+				state.mediaId,
+				state.volume,
+				state.mediaPlayback === 'loop'
+			);
+		}
+
+		return null;
 	}
 
 	function startPreview() {
@@ -53,23 +116,84 @@
 			return;
 		}
 
-		if (!previewEngine) {
-			previewEngine = new NapTimeAudioEngine();
-		}
-
 		stopPreview();
 
-		if (state.newStepType === 'noise') {
-			previewGenerator = previewEngine.createNoiseGenerator(state.noiseType, state.volume);
-		} else if (state.newStepType === 'media') {
-			previewGenerator = previewEngine.createMediaPlayer(state.mediaId, state.volume);
-		} else {
+		previewGenerator = createPreviewGenerator();
+		if (!previewGenerator) {
 			return;
 		}
 
 		previewGenerator.start();
+		previewType = state.newStepType;
+		previewMode =
+			state.newStepType === 'noise'
+				? state.noiseTiming
+				: state.newStepType === 'media'
+					? state.mediaPlayback
+					: null;
+		previewSource =
+			state.newStepType === 'noise'
+				? state.noiseType
+				: state.newStepType === 'media'
+					? state.mediaId
+					: null;
+		previewDuration = previewMode === 'timed' ? state.duration : 0;
+		previewVolume = state.volume;
+		schedulePreviewStop();
 		state.previewing = true;
 	}
+
+	$effect(() => {
+		if (!state.previewing || !browser) {
+			return;
+		}
+
+		if (state.newStepType === 'wait') {
+			stopPreview();
+			return;
+		}
+
+		const currentMode =
+			state.newStepType === 'noise'
+				? state.noiseTiming
+				: state.newStepType === 'media'
+					? state.mediaPlayback
+					: null;
+		const currentSource =
+			state.newStepType === 'noise'
+				? state.noiseType
+				: state.newStepType === 'media'
+					? state.mediaId
+					: null;
+		const currentDuration = currentMode === 'timed' ? state.duration : 0;
+		const currentVolume = state.volume;
+
+		if (
+			!previewGenerator ||
+			state.newStepType !== previewType ||
+			currentMode !== previewMode ||
+			currentSource !== previewSource ||
+			currentDuration !== previewDuration
+		) {
+			stopPreview();
+			previewGenerator = createPreviewGenerator();
+			if (previewGenerator) {
+				previewGenerator.start();
+				previewType = state.newStepType;
+				previewMode = currentMode;
+				previewSource = currentSource;
+				previewDuration = currentDuration;
+				previewVolume = currentVolume;
+				schedulePreviewStop();
+			}
+			return;
+		}
+
+		if (previewGenerator && previewVolume !== null && currentVolume !== previewVolume) {
+			previewGenerator.setVolume(currentVolume);
+			previewVolume = currentVolume;
+		}
+	});
 
 	function togglePreview() {
 		if (state.previewing) {
@@ -88,16 +212,16 @@
 				type: 'noise',
 				noise: state.noiseType,
 				volume: state.volume,
-				duration: state.duration,
-				fade: state.fade
+				timing: state.noiseTiming,
+				duration: state.noiseTiming === 'timed' ? state.duration : undefined
 			});
 		} else if (state.newStepType === 'media') {
 			state.steps.push({
 				type: 'media',
 				id: state.mediaId,
-				loop: state.loop,
+				playback: state.mediaPlayback,
 				volume: state.volume,
-				fade: state.fade
+				duration: state.mediaPlayback === 'timed' ? state.duration : undefined
 			});
 		} else {
 			state.steps.push({
@@ -107,17 +231,7 @@
 		}
 	}
 
-	function removeStep(index: number) {
-		state.steps.splice(index, 1);
-	}
-
 	async function handleSave(event: SubmitEvent) {
-		event.preventDefault();
-
-		if (!browser || !state.profile) {
-			return;
-		}
-
 		if (!state.routineName.trim()) {
 			state.error = 'Routine name is required.';
 			return;
@@ -139,6 +253,10 @@
 
 		await createRoutine(routine);
 		await goto(`/profiles/${state.profileId}`);
+	}
+
+	function removeStep(index: number) {
+		state.steps.splice(index, 1);
 	}
 
 	const canSave = $derived(state.routineName.trim().length > 0 && state.steps.length > 0);
@@ -207,6 +325,21 @@
 							</select>
 						</div>
 						<div>
+							<label class="block text-sm font-medium text-slate-700" for="noise-timing"
+								>Timing</label
+							>
+							<select
+								id="noise-timing"
+								class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+								bind:value={state.noiseTiming}
+							>
+								<option value="timed">Timed</option>
+								<option value="forever">Forever</option>
+							</select>
+						</div>
+					</div>
+					<div class="grid gap-3 sm:grid-cols-2">
+						<div>
 							<label class="block text-sm font-medium text-slate-700" for="noise-volume"
 								>Volume</label
 							>
@@ -222,31 +355,22 @@
 							<p class="mt-2 text-sm text-slate-600">{(state.volume * 100).toFixed(0)}%</p>
 						</div>
 					</div>
-					<div class="grid gap-3 sm:grid-cols-2">
-						<div>
-							<label class="block text-sm font-medium text-slate-700" for="noise-duration"
-								>Duration (seconds)</label
-							>
-							<input
-								id="noise-duration"
-								type="number"
-								min="1"
-								class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-								bind:value={state.duration}
-							/>
+					{#if state.noiseTiming === 'timed'}
+						<div class="grid gap-3 sm:grid-cols-2">
+							<div>
+								<label class="block text-sm font-medium text-slate-700" for="noise-duration"
+									>Duration (seconds)</label
+								>
+								<input
+									id="noise-duration"
+									type="number"
+									min="1"
+									class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+									bind:value={state.duration}
+								/>
+							</div>
 						</div>
-						<div>
-							<label class="block text-sm font-medium text-slate-700" for="noise-fade"
-								>Fade (seconds)</label
-							>
-							<input
-								type="number"
-								min="0"
-								class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-								bind:value={state.fade}
-							/>
-						</div>
-					</div>
+					{/if}
 				{:else if state.newStepType === 'media'}
 					<div class="grid gap-3 sm:grid-cols-2">
 						<div>
@@ -259,12 +383,19 @@
 								bind:value={state.mediaId}
 							/>
 						</div>
-						<div class="flex flex-col gap-3">
-							<label class="block text-sm font-medium text-slate-700" for="media-loop">Loop</label>
-							<label class="inline-flex items-center gap-2 text-sm text-slate-700" for="media-loop">
-								<input id="media-loop" type="checkbox" bind:checked={state.loop} />
-								Loop media
-							</label>
+						<div>
+							<label class="block text-sm font-medium text-slate-700" for="media-playback"
+								>Playback</label
+							>
+							<select
+								id="media-playback"
+								class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+								bind:value={state.mediaPlayback}
+							>
+								<option value="loop">Loop</option>
+								<option value="till-end">Till end</option>
+								<option value="timed">Timed</option>
+							</select>
 						</div>
 					</div>
 					<div class="grid gap-3 sm:grid-cols-2">
@@ -283,19 +414,23 @@
 							/>
 							<p class="mt-2 text-sm text-slate-600">{(state.volume * 100).toFixed(0)}%</p>
 						</div>
-						<div>
-							<label class="block text-sm font-medium text-slate-700" for="media-fade"
-								>Fade (seconds)</label
-							>
-							<input
-								id="media-fade"
-								type="number"
-								min="0"
-								class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
-								bind:value={state.fade}
-							/>
-						</div>
 					</div>
+					{#if state.mediaPlayback === 'timed'}
+						<div class="grid gap-3 sm:grid-cols-2">
+							<div>
+								<label class="block text-sm font-medium text-slate-700" for="media-duration"
+									>Duration (seconds)</label
+								>
+								<input
+									id="media-duration"
+									type="number"
+									min="1"
+									class="mt-2 w-full rounded-3xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 transition outline-none focus:border-slate-500 focus:ring-2 focus:ring-slate-200"
+									bind:value={state.duration}
+								/>
+							</div>
+						</div>
+					{/if}
 				{:else}
 					<div>
 						<label class="block text-sm font-medium text-slate-700" for="duration"
@@ -341,9 +476,18 @@
 										<p class="font-semibold text-slate-900">{step.type}</p>
 										<p class="text-sm text-slate-600">
 											{#if step.type === 'noise'}
-												Noise {step.noise} · {Math.round(step.volume * 100)}% · {step.duration}s
+												Noise {step.noise} · {Math.round(step.volume * 100)}% · {step.timing ===
+												'forever'
+													? 'forever'
+													: `${step.duration}s`}
 											{:else if step.type === 'media'}
-												Media {step.id} · {step.loop ? 'loop' : 'one-time'}
+												{#if step.playback === 'loop'}
+													Media {step.id} · loop
+												{:else if step.playback === 'till-end'}
+													Media {step.id} · till end
+												{:else}
+													Media {step.id} · timed {step.duration}s
+												{/if}
 											{:else}
 												Wait {step.duration}s
 											{/if}

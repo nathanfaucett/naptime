@@ -1,20 +1,22 @@
 export type NoiseType = 'white' | 'pink' | 'brown';
 export type RoutineActionType = 'noise' | 'media' | 'wait';
+export type NoiseTiming = 'forever' | 'timed';
+export type MediaPlayback = 'loop' | 'till-end' | 'timed';
 
 export interface NoiseAction {
 	type: 'noise';
 	noise: NoiseType;
 	volume: number;
-	duration: number;
-	fade?: number;
+	timing: NoiseTiming;
+	duration?: number;
 }
 
 export interface MediaAction {
 	type: 'media';
 	id: string;
-	loop?: boolean;
+	playback: MediaPlayback;
 	volume?: number;
-	fade?: number;
+	duration?: number;
 }
 
 export interface WaitAction {
